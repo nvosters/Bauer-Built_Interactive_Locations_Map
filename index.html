@@ -306,48 +306,26 @@ async function geocodeAddress(addr) {
 }
 
 async function groupClinics(rows) {
-  // First, exact city/state match to Bauer Built location coords
-  const locationLookup = new Map(locationGroups.map(g => [`${g.city}|${g.state}`, g]));
-  const clinics = rows.map((r, idx) => ({
-    ...r,
-    type:'clinic',
-    key:`clinic|${idx}|${r['DMF Name']}`,
-    city:r['DMF City'],
-    state:r['DMF State'],
-    name:r['DMF Name']
-  }));
+  const out = [];
 
-  const byCity = new Map();
-  clinics.forEach(c => {
-    const cityKey = `${c.city}|${c.state}`;
-    if (!byCity.has(cityKey)) byCity.set(cityKey, []);
-    byCity.get(cityKey).push(c);
+  rows.forEach((r, idx) => {
+    const lat = parseFloat(r.Lat || r.lat || r.Latitude || r.latitude);
+    const lng = parseFloat(r.Long || r.long || r.Lng || r.lng || r.Longitude || r.longitude);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+    out.push({
+      ...r,
+      type: 'clinic',
+      key: `clinic|${idx}|${r['DMF Name']}`,
+      city: r['DMF City'],
+      state: r['DMF State'],
+      name: r['DMF Name'],
+      lat: lat,
+      lng: lng
+    });
   });
 
-  const out = [];
-  for (const [cityKey, arr] of byCity.entries()) {
-    const locMatch = locationLookup.get(cityKey);
-    if (locMatch) {
-      arr.forEach((c, i) => {
-        const off = jitter(i, arr.length);
-        out.push({
-          ...c,
-          lat: locMatch.lat + off.lat,
-          lng: locMatch.lng + off.lng
-        });
-      });
-    } else {
-      for (let i = 0; i < arr.length; i++) {
-        const c = arr[i];
-        const full = clinicAddress(c);
-        const geo = await geocodeAddress(full);
-        if (geo) {
-          const off = jitter(i, arr.length);
-          out.push({ ...c, lat: geo.lat + off.lat*0.2, lng: geo.lng + off.lng*0.2 });
-        }
-      }
-    }
-  }
   return out;
 }
 
